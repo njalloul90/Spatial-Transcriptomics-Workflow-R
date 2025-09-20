@@ -1,21 +1,40 @@
-# 06-visualizations.R
-source("scripts/00-setup.R")
-seurat_annot <- readRDS(file.path(proc_dir, "seurat_merged_annotated.rds"))
+#!/usr/bin/env Rscript
+# scripts/06-visualizations.R
+# UMAP and spatial visualizations
 
-# UMAP with cell types
-p1 <- DimPlot(seurat_annot, reduction = "umap", group.by = "cell_type", label = TRUE) + ggtitle("UMAP: cell types")
-ggsave(file.path(fig_dir, "umap_celltypes.png"), p1, width = 8, height = 6)
+message("=== Generating Visualizations ===")
 
-# spatial plots: example feature and cell type distribution
-# pick top gene from earlier top markers file
-top_markers <- read.csv(file.path(tables_dir, "cluster_top_markers.csv"))
-example_gene <- top_markers$gene[1]
-p2 <- SpatialFeaturePlot(seurat_annot, features = example_gene) + ggtitle(example_gene)
-ggsave(file.path(fig_dir, paste0("spatial_", example_gene, ".png")), p2, width = 8, height = 6)
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(patchwork)
+  library(cowplot)
+  library(ggplot2)
+})
 
-# plot cell type proportions across samples
-prop_table <- read.csv(file.path(tables_dir, "celltype_proportions_by_sample.csv"))
-p3 <- prop_table %>% ggplot(aes(x = sample_id, y = prop, fill = cell_type)) +
-  geom_col(position = "fill") + theme_minimal() + coord_flip() +
-  ggtitle("Cell type proportions by sample")
-ggsave(file.path(fig_dir, "celltype_proportions_by_sample.png"), p3, width = 10, height = 6)
+# -----------------------------
+# Load data
+# -----------------------------
+data_dir <- "data"
+example_file <- file.path(data_dir, "example_spatial.rds")
+user_files <- setdiff(list.files(data_dir, pattern = "\\.rds$", full.names = TRUE), example_file)
+input_file <- if(length(user_files) > 0) user_files[1] else example_file
+message("Loading dataset: ", basename(input_file))
+
+seurat_obj <- readRDS(input_file)
+
+# -----------------------------
+# UMAP
+# -----------------------------
+if("umap" %in% names(seurat_obj@reductions)){
+  p1 <- DimPlot(seurat_obj, reduction="umap", group.by="cell_type", label=TRUE) + ggtitle("UMAP Cell Types")
+  ggsave(file.path("results", "umap_celltypes.png"), p1, width=8, height=6)
+}
+
+# -----------------------------
+# Spatial plot (example feature)
+# -----------------------------
+feature <- rownames(seurat_obj)[1]  # top gene
+p2 <- SpatialFeaturePlot(seurat_obj, features=feature) + ggtitle(feature)
+ggsave(file.path("results", paste0("spatial_", feature, ".png")), p2, width=8, height=6)
+
+message("Visualizations saved to results/")
