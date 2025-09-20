@@ -14,25 +14,6 @@ The repo is designed for:
 
 ---
 
-## 📂 Repository Structure
-
-├── Dockerfile # Reproducible R environment
-├── .github/workflows/ # GitHub Actions CI/CD pipeline
-│ └── build-and-report.yml
-├── scripts/ # Modular R scripts for workflow
-│ ├── 00-setup.R
-│ ├── 01-qc-preprocess.R
-│ ├── 02-clustering-markers.R
-│ ├── 03-celltype-annotation.R
-│ ├── 04-pseudobulk-dge.R
-│ ├── 05-abundance-and-regression.R
-│ └── 06-visualizations.R
-├── analysis/
-│ └── spatial_analysis_report.Rmd # RMarkdown summary report
-├── results/ # Generated outputs (QC, markers, DEG, plots)
-└── README.md
----
-
 ## ⚙️ Workflow Overview
 
 1. **Data QC & Preprocessing**
