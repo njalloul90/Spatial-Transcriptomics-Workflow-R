@@ -1,32 +1,39 @@
-# 03-celltype-annotation.R
-# Two approaches: SingleR reference-based and manual marker-based annotation
+#!/usr/bin/env Rscript
+# scripts/03-celltype-annotation.R
+# Cell type annotation using SingleR
 
-source("scripts/00-setup.R")
-seurat_merged <- readRDS(file.path(proc_dir, "seurat_merged_qc.rds"))
+message("=== Running Cell Type Annotation ===")
 
-# convert to SingleCellExperiment for SingleR
-sce <- as.SingleCellExperiment(seurat_merged, assay = "SCT")
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(SingleR)
+  library(celldex)
+})
 
-# load a reference (e.g., HumanPrimaryCellAtlasData, MonacoImmuneData, or a custom reference)
-ref <- celldex::HumanPrimaryCellAtlasData()  # choose as appropriate for organism/dataset
+# -----------------------------
+# Load data
+# -----------------------------
+data_dir <- "data"
+example_file <- file.path(data_dir, "example_spatial.rds")
+user_files <- setdiff(list.files(data_dir, pattern = "\\.rds$", full.names = TRUE), example_file)
+input_file <- if(length(user_files) > 0) user_files[1] else example_file
+message("Loading dataset: ", basename(input_file))
 
-# run SingleR
+seurat_obj <- readRDS(input_file)
+
+# -----------------------------
+# SingleR annotation
+# -----------------------------
+message("Converting to SingleCellExperiment...")
+sce <- as.SingleCellExperiment(seurat_obj, assay = "SCT")
+ref <- celldex::HumanPrimaryCellAtlasData()
 pred <- SingleR(test = sce, ref = ref, labels = ref$label.main)
-# attach predictions back to Seurat metadata
-seurat_merged$SingleR_label <- pred$labels
+seurat_obj$SingleR_label <- pred$labels
 
-# Optionally smooth or propagate labels across spatial neighbors / clusters
-seurat_merged$cluster_label <- paste0("cl", seurat_merged$seurat_clusters)
-# Summarize per cluster to get cluster-level labels (majority vote)
-cluster_labels <- data.frame(cluster = seurat_merged$seurat_clusters, SingleR = seurat_merged$SingleR_label)
-cl_map <- cluster_labels %>% group_by(cluster) %>% count(SingleR) %>% top_n(1, n) %>% ungroup()
-cl_map <- cl_map %>% select(cluster, SingleR)
-# create a cluster->label map
-cluster_to_label <- setNames(as.character(cl_map$SingleR), cl_map$cluster)
-seurat_merged$cell_type <- as.character(cluster_to_label[as.character(seurat_merged$seurat_clusters)])
-# fallback to SingleR label if cluster assignment NA
-seurat_merged$cell_type[is.na(seurat_merged$cell_type)] <- seurat_merged$SingleR_label[is.na(seurat_merged$cell_type)]
+# Optional: propagate cluster-level labels
+seurat_obj$cell_type <- seurat_obj$SingleR_label
 
-# Save annotated Seurat object
-saveRDS(seurat_merged, file = file.path(proc_dir, "seurat_merged_annotated.rds"))
-write.csv(table(seurat_merged$cell_type, seurat_merged$sample_id), file.path(tables_dir, "celltype_by_sample_counts.csv"))
+saveRDS(seurat_obj, file.path("results", "seurat_annotated.rds"))
+write.csv(table(seurat_obj$cell_type, seurat_obj$seurat_clusters),
+          file.path("results", "celltype_counts.csv"))
+message("Cell type annotation complete.")
