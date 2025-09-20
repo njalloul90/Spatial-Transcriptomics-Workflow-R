@@ -1,0 +1,57 @@
+name: Build and Run Spatial Workflow
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4.1'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libhdf5-dev libcurl4-openssl-dev libssl-dev libxml2-dev \
+            libfontconfig1-dev libharfbuzz-dev libfribidi-dev \
+            libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev
+
+      - name: Install R packages
+        run: |
+          Rscript -e "install.packages(c('remotes','here','Matrix','cowplot','patchwork','jsonlite','scales'))"
+          Rscript -e "if(!requireNamespace('BiocManager', quietly=TRUE)) install.packages('BiocManager')"
+          Rscript -e "BiocManager::install(c('Seurat','SeuratDisk','SingleCellExperiment','SingleR','celldex','edgeR','limma','SpatialExperiment'), ask=FALSE, update=TRUE)"
+          Rscript -e "install.packages('rmarkdown')"
+
+      - name: Run pipeline scripts
+        run: |
+          Rscript scripts/00-setup.R
+          Rscript scripts/01-qc-preprocess.R
+          Rscript scripts/02-clustering-markers.R
+          Rscript scripts/03-celltype-annotation.R
+          Rscript scripts/04-pseudobulk-dge.R
+          Rscript scripts/05-abundance-and-regression.R
+          Rscript scripts/06-visualizations.R
+
+      - name: Render RMarkdown report
+        run: |
+          Rscript -e "rmarkdown::render('analysis/spatial_analysis_report.Rmd')"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: spatial-analysis-results
+          path: |
+            results/
+            analysis/spatial_analysis_report.html
