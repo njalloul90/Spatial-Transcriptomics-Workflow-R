@@ -1,45 +1,82 @@
-# 00-setup.R
-# Install / load packages, set file paths
+#!/usr/bin/env Rscript
+# scripts/00-setup.R
+# Setup script for Spatial Transcriptomics workflow
+# - Installs required packages
+# - Downloads small example data (stxBrain) if no user data provided
+# - Ensures folder structure exists
 
-required_pkgs <- c(
-  "Seurat", "SeuratDisk", "SingleCellExperiment", "SingleR", "celldex",
-  "edgeR", "limma", "scales", "Matrix", "tidyverse", "patchwork",
-  "cowplot", "jsonlite"
+message("=== Setting up environment for Spatial Transcriptomics workflow ===")
+
+# -----------------------------
+# Package installation function
+# -----------------------------
+install_if_missing <- function(pkgs, bioc = FALSE) {
+  if (bioc) {
+    if (!requireNamespace("BiocManager", quietly = TRUE)) {
+      install.packages("BiocManager", repos = "https://cloud.r-project.org")
+    }
+    BiocManager::install(pkgs, ask = FALSE, update = TRUE)
+  } else {
+    missing <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)]
+    if (length(missing) > 0) {
+      install.packages(missing, repos = "https://cloud.r-project.org")
+    }
+  }
+}
+
+# -----------------------------
+# Install required packages
+# -----------------------------
+cran_pkgs <- c(
+  "here", "Matrix", "cowplot", "patchwork",
+  "jsonlite", "scales", "rmarkdown", "SeuratData"
 )
 
-install_if_missing <- function(pkgs){
-  missing <- pkgs[!pkgs %in% installed.packages()[, "Package"]]
-  if(length(missing)) install.packages(missing, repos = "https://cloud.r-project.org")
+bioc_pkgs <- c(
+  "Seurat", "SeuratDisk",
+  "SingleCellExperiment", "SingleR", "celldex",
+  "edgeR", "limma", "SpatialExperiment"
+)
+
+message("Installing CRAN packages...")
+install_if_missing(cran_pkgs, bioc = FALSE)
+
+message("Installing Bioconductor packages...")
+install_if_missing(bioc_pkgs, bioc = TRUE)
+
+# Load packages
+sapply(c(cran_pkgs, bioc_pkgs), require, character.only = TRUE)
+
+# -----------------------------
+# Ensure folder structure
+# -----------------------------
+if (!dir.exists("data")) dir.create("data")
+if (!dir.exists("results")) dir.create("results")
+
+# -----------------------------
+# Example dataset setup
+# -----------------------------
+example_file <- "data/example_spatial.rds"
+
+if (!file.exists(example_file)) {
+  message("No user data found in data/. Downloading example dataset (stxBrain)...")
+  SeuratData::InstallData("stxBrain")
+  data("stxBrain", package = "stxBrain")
+  saveRDS(stxBrain, file = example_file)
+  message("Example dataset saved to ", example_file)
+} else {
+  message("Example dataset already exists at ", example_file)
 }
-install_if_missing(required_pkgs)
 
-# Bioconductor packages
-if(!requireNamespace("BiocManager", quietly=TRUE)) install.packages("BiocManager")
-bioc_pkgs <- c("SingleR", "celldex", "SpatialExperiment")
-for(p in bioc_pkgs) if(!p %in% installed.packages()[,1]) BiocManager::install(p, ask = FALSE)
+# -----------------------------
+# Data availability check
+# -----------------------------
+user_files <- list.files("data", pattern = "\\.rds$", full.names = TRUE)
+if (length(user_files) > 1) {
+  message("User data detected in /data: ", paste(basename(user_files), collapse = ", "))
+  message("Workflow will use user data instead of example dataset.")
+} else {
+  message("Using example dataset. To analyze your own data, place .rds files in /data.")
+}
 
-# load
-library(Seurat)
-library(SeuratDisk)
-library(SingleR)
-library(celldex)
-library(edgeR)
-library(limma)
-library(tidyverse)
-library(patchwork)
-library(cowplot)
-
-# Paths - edit to your environment
-root_dir <- here::here()
-data_dir <- file.path(root_dir, "data")
-raw_dir <- file.path(data_dir, "raw")
-proc_dir <- file.path(data_dir, "processed")
-results_dir <- file.path(root_dir, "results")
-fig_dir <- file.path(results_dir, "figures")
-tables_dir <- file.path(results_dir, "tables")
-dir.create(proc_dir, showWarnings = FALSE, recursive = TRUE)
-dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
-dir.create(fig_dir, showWarnings = FALSE, recursive = TRUE)
-dir.create(tables_dir, showWarnings = FALSE, recursive = TRUE)
-
-message("Setup complete. Edit paths in 00-setup.R if needed.")
+message("=== Setup complete! ===")
